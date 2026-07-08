@@ -1,0 +1,12 @@
+.DS_Store
+*.jou
+*.log
+*.str
+*.wdb
+*.xpr.zip
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.srcs/
