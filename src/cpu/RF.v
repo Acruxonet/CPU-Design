@@ -15,10 +15,13 @@ module RF(
     reg [31:0] rf[31:0];
     integer i;
 
-    always @(posedge clk or posedge rst) begin
+    always @(negedge clk or posedge rst) begin
         if (rst) begin
             for (i = 0; i < 32; i = i + 1)
-                rf[i] <= 32'b0;
+                rf[i] <= i * 32'h0001_0000 + i;
+            rf[1] <= 32'h0000_0000;
+            rf[2] <= 32'h0000_0400;
+            rf[31] <= 32'hdeed_beef;
         end else if (RFWr && A3 != 5'd0) begin
             rf[A3] <= WD;
         end

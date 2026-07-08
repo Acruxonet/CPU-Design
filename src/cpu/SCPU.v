@@ -85,10 +85,15 @@ module SCPU(
     wire        id_is_branch = (id_op == OP_BRANCH);
     wire        id_is_jal    = (id_op == OP_JAL);
     wire        id_is_jalr   = (id_op == OP_JALR);
-    wire        id_is_load_unused = (id_op == OP_LOAD);
-    wire        id_is_store_unused = (id_op == OP_STORE);
+    wire        id_is_load   = (id_op == OP_LOAD);
+    wire        id_is_store  = (id_op == OP_STORE);
+    wire        id_uses_rs1 = (id_op == 7'b0110011) || (id_op == 7'b0010011) ||
+                              id_is_load || id_is_store || id_is_branch ||
+                              id_is_jalr;
+    wire        id_uses_rs2 = (id_op == 7'b0110011) || id_is_store ||
+                              id_is_branch;
     wire        _unused_id_decode = &{1'b0, id_npcop_unused, id_gprsel_unused,
-                                      id_is_load_unused, id_is_store_unused};
+                                      id_is_jal};
 
     ctrl U_ctrl(
         .Op(id_op),
@@ -246,6 +251,11 @@ module SCPU(
     wire        ex_redirect = ex_is_control &&
                               ((ex_actual_taken != id_ex_pred_taken) ||
                                (ex_actual_target != id_ex_pred_target));
+    wire        load_use_stall = if_id_valid && id_ex_valid &&
+                                 (id_ex_wdsel == `WDSel_FromMEM) &&
+                                 id_ex_regwrite && (id_ex_rd != 5'd0) &&
+                                 ((id_uses_rs1 && (id_ex_rd == id_rs1)) ||
+                                  (id_uses_rs2 && (id_ex_rd == id_rs2)));
 
     assign mem_w    = ex_mem_valid && ex_mem_memwrite;
     assign Addr_out = ex_mem_aluout;
@@ -302,7 +312,10 @@ module SCPU(
             mem_wb_regwrite <= 1'b0;
             mem_wb_wdsel <= `WDSel_FromALU;
         end else begin
-            pc_reg <= ex_redirect ? ex_actual_target : if_pred_target;
+            if (ex_redirect)
+                pc_reg <= ex_actual_target;
+            else if (!load_use_stall)
+                pc_reg <= if_pred_target;
 
             if (ex_redirect) begin
                 if_id_valid <= 1'b0;
@@ -311,7 +324,7 @@ module SCPU(
                 if_id_inst <= 32'b0;
                 if_id_pred_taken <= 1'b0;
                 if_id_pred_target <= 32'b0;
-            end else begin
+            end else if (!load_use_stall) begin
                 if_id_valid <= 1'b1;
                 if_id_pc <= pc_reg;
                 if_id_pc4 <= if_pc4;
@@ -320,7 +333,7 @@ module SCPU(
                 if_id_pred_target <= if_pred_target;
             end
 
-            if (ex_redirect) begin
+            if (ex_redirect || load_use_stall) begin
                 id_ex_valid <= 1'b0;
                 id_ex_pc <= 32'b0;
                 id_ex_pc4 <= 32'b0;
